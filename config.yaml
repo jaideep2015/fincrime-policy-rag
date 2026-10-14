@@ -9,6 +9,72 @@ paths:
   index_dir: chroma_db
   cache_dir: .cache
   experiments_dir: experiments/results
+  reports_dir: reports
+
+ingestion:
+  # Scripted downloads are restricted to these hosts (US-government publishers that allow it).
+  # FATF and FFIEC block scripted access: those files are placed manually (see manifest `source`).
+  allowed_download_hosts:
+    - www.fincen.gov
+    - www.govinfo.gov
+  min_pdf_bytes: 10000
+  timeout_seconds: 60
+  user_agent: "fincrime-rag-portfolio/0.1 (research; contact via repo)"
+
+ocr:
+  # Text-coverage check on every page, plus OCR fallback for pages whose text layer is incomplete
+  # (e.g. FinCEN red-flag bullets that are images). OCR results are cached under paths.cache_dir.
+  enabled: true
+  engine: rapidocr                # rapidocr-onnxruntime, installed with pip (no system install)
+  dpi: 200                        # render resolution for OCR
+  # The coverage check OCRs every page with default settings (fast). Pages it flags are re-OCR'd with
+  # looser detection settings, which find lines the default pass can miss, to produce the fallback text.
+  recover_box_thresh: 0.3
+  recover_text_score: 0.3
+  recover_unclip_ratio: 2.0
+  # 0.90 rather than 0.80: on the COVID advisory, page 5 (two missing red-flag bullets) scores 0.84 while
+  # pages with complete text score 0.95-1.10 across the corpus.
+  coverage_threshold: 0.90        # flag a page when text-layer words / OCR words is below this
+  coverage_min_ocr_words: 10      # pages with fewer OCR words are not judged (decorative / blank)
+  # Merge for flagged pages that still have a usable text layer: the text layer is the base and only OCR
+  # boxes it does not already cover are added. Pages without a usable text layer use OCR text alone.
+  merge_covered_fraction: 0.50    # an OCR box is "already covered" when this share of its area lies on text-layer words
+  merge_min_layer_words: 100      # usable text layer: at least this many words ...
+  merge_min_box_coverage: 0.35    # ... and at least this share of the OCR boxes covered by the text layer
+  min_confidence: 0.60            # OCR boxes below this are dropped (the high-recall pass emits garbage at 0.3-0.5)
+  icon_gutter_fraction: 0.09      # icon noise lives left of this share of the page width ...
+  icon_max_chars: 3               # ... is at most this many characters ...
+  icon_max_confidence: 0.85       # ... and is recognised with at most this confidence
+  paragraph_gap_factor: 1.3       # line gap above this x the median line pitch starts a new paragraph
+
+cleaning:
+  header_footer_scan_lines: 5     # edge lines per side scanned for repeated running heads
+  page_number_scan_lines: 3       # edge lines per side scanned for bare page numbers
+  repeat_fraction: 0.4            # a normalised line on >= this share of pages is a header/footer
+  min_pages_for_detection: 5      # shorter documents skip repeat detection
+  strip_edge_page_numbers: true   # also drop bare page-number lines at page edges
+  running_head_scan_lines: 3      # first lines of a page matched against the two pattern lists below
+  running_head_patterns:          # whole-line regexes (e.g. CFR heads); a named group `section` fills section_hint
+    - '^§\s*(?P<section>\d+\.\d+)$'
+    - '^Pt\.\s*\d+,\s*(?:App\.\s*[A-Z]|Supp\.\s*I)$'
+  printed_page_head_patterns:     # whole-line regexes for "N | TITLE" / "TITLE | N"; group `page` is the printed page
+    - '^(?P<page>\d{1,4})\s*\|\s*\S.*$'
+    - '^\S.*?\s*\|\s*(?P<page>\d{1,4})$'
+  page_tags:                      # pages tagged with a content_type (every other page is "body")
+    # Reg E Appendix A model forms: images of sample forms, poorly OCR'd, little retrieval value (D-016)
+    - {doc_id: cfr_12_1005_reg_e, first_page: 61, last_page: 79, content_type: model_form}
+
+indexing:
+  exclude_content_types: [model_form]   # pages with these content types stay in data/processed but are not indexed
+
+qa:
+  empty_page_max_chars: 50        # pages at or below this are "empty"
+  flag_empty_page_share: 0.05     # flag a document if more than this share of pages are empty ...
+  flag_empty_page_min_count: 2    # ... and at least this many (a lone image cover page is normal)
+  flag_bad_char_ratio: 0.01       # replacement/control/private-use characters
+  flag_odd_token_ratio: 0.05      # vowel-less or very long non-URL tokens
+  odd_token_ignore_acronyms: true # all-caps tokens (CMLN, NMLRA, TCOs) are acronyms, not garble
+  flag_min_chars_per_page: 400    # median chars/page below this is suspicious
 
 chunking:
   strategy: recursive        # recursive | (stretch) section_aware

@@ -44,3 +44,43 @@ Log of design choices. Format: date, options considered, choice, why, how to rev
 ## D-009 Tooling scope for Phase 0 (2026-10-12)
 - **Choice:** ruff + pytest only. Pre-commit and CI move to Phase 9.
 - **Why:** Keep the scaffold minimal.
+
+## D-010 Page numbering: store both PDF index and printed label (2026-10-13)
+- **Choice:** Every page record has `pdf_page` (1-based, always present, the key for citations and retrieval metrics) and `page_label` (the label the PDF defines, else null). When the PDF defines no label, cleaning records `printed_page_guess` from the page-number line it strips at the page edge.
+- **Why:** Printed numbers are unreliable to parse (roman numerals, "4-12", cover pages), but readers expect them in citations. Metrics use the PDF index only.
+- **Revisit:** If citations should show printed pages, check `printed_page_guess` coverage in the QA report first.
+
+## D-011 Header/footer removal is detected from the data and fully logged (2026-10-13)
+- **Choice:** Candidates are the first/last 3 non-empty lines per page. Bare page numbers are always removed; other lines are removed when their digit-normalised form appears on at least 40% of pages (skipped for documents under 5 pages). Every removed line is written to `data/processed/logs/<doc_id>_removed_lines.csv`.
+- **Why:** Hard-coded patterns do not generalise across publishers, and repeated running heads pollute embeddings and BM25. Removing only edge lines limits the risk to body text; the log makes that risk reviewable.
+- **Known limits:** Short documents keep their running heads; a bare number at a page edge (e.g. a table value) can be mistaken for a page number; words hyphenated across a page break are not repaired.
+
+## D-012 Line-end hyphenation repair uses the document's own vocabulary (2026-10-13)
+- **Choice:** For "left-" + newline + "right": join if the joined word occurs elsewhere in the document; keep the hyphen if the hyphenated compound occurs elsewhere or both parts are standalone words of 3+ letters; otherwise join. Fragments created by the breaks themselves are excluded from the vocabulary.
+- **Why:** Blind joining turns "anti-money" into "antimoney", which would hurt retrieval for the most common term in the corpus.
+
+## D-013 Document acquisition: script for US-government hosts, manual for FATF and FFIEC (2026-10-13)
+- **Choice:** `source=script` rows download from hosts allow-listed in `config.yaml` (FinCEN, GovInfo) with full TLS verification, a `%PDF-` header check, a size check and sha256. FATF and FFIEC return HTTP 403 to scripts, so those four files are placed manually under fixed filenames; `verify` records their sha256. No attempt is made to bypass the blocks.
+- **Manifest columns:** `source` (script/manual), `filename`, `date` (publication) and `version_date` (revision date printed in the PDF; for FFIEC and CFR editions).
+
+## D-014 Text-coverage check and OCR merge (2026-10-14, revised after review)
+- **Problem:** some PDFs hold content only as images. The COVID advisory (FIN-2020-A003) had 2 of its 18 red-flag bullets in the text layer; Reg E pages 61-79 have almost no text layer.
+- **Choice:** every page is rendered and OCR'd once (RapidOCR via pip, cached by file sha256). Coverage = text-layer words / OCR words; a page below `ocr.coverage_threshold` (0.90) is flagged. OCR boxes under `ocr.min_confidence` and red-flag icon noise (short, low-confidence boxes in the left gutter; the icons are numbered flags that OCR reads as digits) are dropped everywhere.
+- **Merge, not replace:** a first version replaced flagged pages with OCR text; that lost text-layer content and introduced OCR typos. Flagged pages with a usable text layer (at least `merge_min_layer_words` words and at least `merge_min_box_coverage` of OCR boxes already on text-layer words) now keep the text layer as the base. Flagged pages are re-OCR'd with looser detection settings (`recover_*`); from that pass only boxes that are not already covered (at least `merge_covered_fraction` of their area on text-layer words, compared in PDF points) are kept. Text-layer rows and OCR-only boxes are sorted by vertical position (footnotes land at the bottom); a run of OCR-only lines is its own paragraph. `extraction_method` is `merged`.
+- **No usable text layer** (image-only covers, scanned forms): OCR text alone, `extraction_method = "ocr"`.
+- **Threshold 0.90, not 0.80:** COVID page 5 (two missing bullets) scores 0.84; pages with complete text score 0.95-1.10.
+- **Verification:** QA reports "text-layer lines lost" (text-layer lines of 5+ words absent from the final text, excluding heads that cleaning removed on purpose); it is 0 on every merged page. An acceptance test on the real COVID PDF checks 18 red flags, four previously lost text-layer lines, the absence of the OCR typos, and printed pages 4-7.
+- **Tuning:** the merge rule (`merge_min_layer_words` 100, `merge_min_box_coverage` 0.35) was tuned empirically on this corpus; COVID page 7 (122 layer words, box coverage 0.394) is the tightest case.
+- **Limits:** the merge orders rows by vertical position and so assumes single-column pages; every merged page in this corpus is single-column. Reg E page 74 is merged (it has a text layer of 125 words); the other model-form pages are OCR-only.
+
+## D-015 Running-head rules (2026-10-14)
+- **Choice:** `normalize_line` collapses digit runs to one `#`, maps U+F07C to `|`, sorts the two sides of `A | B` heads and drops all whitespace, so "6 | TITLE", "TITLE | 7" and letter-spaced or OCR'd forms of the same head are one pattern. Repeat detection scans 5 edge lines, bare page numbers only 3. Configured regexes (CFR "§ n.n", "Pt. n, Supp. I", "N | TITLE") match only the first 3 lines; their printed page and `section_hint` are recorded before the line is removed, and lines those regexes handle are excluded from repeat detection so a bare "§ 1005.99" lower on a page survives.
+- **Also:** the Symbol-font bullet U+F0B7 becomes "•", and a bullet extracted on its own line is joined to the next line.
+
+## D-016 Reg E Appendix A model forms are tagged and kept out of the index (2026-10-14)
+- **Choice:** pages 61-79 of `cfr_12_1005_reg_e` (images of sample forms, poor OCR: spacing lost, merged heads) get `content_type = "model_form"` via `cleaning.page_tags` in `config.yaml`; every other page is `"body"`. `indexing.exclude_content_types` (default `[model_form]`) keeps them out of the index; they stay in `data/processed` and can be re-included by editing the config. `indexable_pages()` applies the rule.
+- **Why:** they add little retrieval value and would put garbled text in the index and in citations.
+
+## D-017 printed_page_guess sanity check (2026-10-14)
+- **Choice:** per document, the modal (printed - PDF page) offset over numeric guesses is computed (needs 3+ numeric guesses, with the mode on at least half of them); guesses that deviate are set to None and the original kept in `printed_page_guess_rejected`. Non-numeric guesses ("F-1") are left alone. The QA report shows how many were nulled per document.
+- **Why:** stray numbers read from covers or figures (FATF 2020 had "10" and "19" at an offset of 9 and 16 against the document's -2) would otherwise show up in citations.
