@@ -88,6 +88,13 @@ class Retriever:
         ranked = sorted(range(len(self._ids)), key=lambda i: (-scores[i], self._ids[i]))[:depth]
         return [(self._ids[i], float(scores[i])) for i in ranked if scores[i] > 0]
 
+    def dense_similarities(self, query: str, depth: int) -> list[tuple[str, float]]:
+        """(chunk_id, cosine similarity) best first. Used by the refusal gate, whatever the mode:
+        RRF scores depend only on ranks, so they cannot say how close the best chunk really is."""
+        if self.cfg.vectorstore.space != "cosine":
+            raise ValueError("dense_similarities needs vectorstore.space = cosine")
+        return [(cid, 1.0 + score) for cid, score in self._dense(query, depth)]
+
     def retrieve(self, query: str, k: int | None = None, mode: str | None = None) -> list[Hit]:
         mode = mode or self.cfg.retrieval.mode
         k = k or self.cfg.retrieval.top_k

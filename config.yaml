@@ -121,8 +121,42 @@ evaluation:
 
 llm:
   provider: ollama           # ollama (default) | anthropic (optional, needs your own key)
-  model: null                # chosen in Phase 5
+  model: qwen2.5:3b-instruct
   temperature: 0.0
   ollama_host: http://localhost:11434
+  num_ctx: 8192              # explicit Ollama context window (prompt + answer); logged with every result
+  max_output_tokens: 400
+  request_timeout_seconds: 300
+  fallback_to_extractive: true   # if Ollama is unreachable, use the extractive backend and record it
+  chars_per_token: 3.0       # conservative estimate used by the prompt-budget assertion
+
+generation:
+  context_k: 8               # chunks given to the generator; fixed a priori (D-022), never tuned on results
+  extractive_sentences: 3    # sentences returned by the extractive backend
+  min_sentence_words: 6      # shorter fragments are not quoted
+  insufficient_marker: INSUFFICIENT_CONTEXT
+
+refusal:
+  # Retrieval-score gate (D-023): refuse when the top-1 dense cosine similarity is below the
+  # `percentile`-th percentile of in-corpus top-1 similarities (sampled, a priori, not tuned).
+  percentile: 5
+  calibration_queries: 300   # corpus sentences sampled as queries (source chunk excluded from the ranking)
+  min_query_words: 8
+  calibration_file: data/processed/refusal_calibration.json   # derived artifact (gitignored)
+
+injection:
+  # Generic instruction-like phrasings (lower-case regexes), written a priori, not taken from any eval item.
+  patterns:
+    - '\b(ignore|disregard|forget)\b.{0,40}\b(previous|prior|above|earlier|all|any|your)\b.{0,40}\b(instructions?|rules?|prompts?|context)\b'
+    - '\b(reveal|print|show|repeat)\b.{0,30}\b(system|hidden|initial)\b.{0,20}\b(prompt|instructions?)\b'
+    - '\byou are now\b'
+    - '\b(respond|reply|answer|output)\b.{0,20}\b(only|just|exactly)\b.{0,10}\b(with|in)\b'
+    - '\bnew instructions?\b'
+    - '\boverride\b.{0,30}\b(rules?|instructions?|safety|policy)\b'
+  echo_overlap: 0.8          # a reply is an echo when this share of its words is inside an injected sentence
+
+generation_eval:
+  bootstrap_samples: 2000
+  confidence: 0.95
 
 seed: 42

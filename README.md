@@ -65,3 +65,14 @@ hits = retrieve("What triggers a SAR filing?", k=5, mode="hybrid")   # dense | b
 python -m fincrime_rag.evaluate retrieval   # LLM-free recall@1/3/5/10, MRR, hit rate -> reports/retrieval_results.md
 ```
 Only aggregate metrics are printed. Details and definitions: D-021.
+
+## Generation, refusal and evaluation (Phases 5-6)
+No `make` is needed; all commands use the venv (`.venv\Scripts\python` on Windows).
+```bash
+python -m fincrime_rag.guardrails calibrate            # refusal threshold from the corpus -> data/processed/refusal_calibration.json
+python -m fincrime_rag.generation "your question"      # --backend extractive|ollama  --mode dense|bm25|hybrid
+python scripts/eval_generation.py                      # -> reports/generation_results.md (aggregate metrics, bootstrap CIs)
+```
+Context k = 8 (D-022). The `ollama` backend needs a running Ollama server with `qwen2.5:3b-instruct` pulled;
+if the server is unreachable the pipeline falls back to the extractive backend and records that it did.
+All 20 eval questions are dev; there is no held-out split. See D-022 to D-025.

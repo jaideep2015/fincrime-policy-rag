@@ -185,6 +185,45 @@ class LLMConfig(_Strict):
     model: str | None = None
     temperature: float = Field(default=0.0, ge=0.0)
     ollama_host: str = "http://localhost:11434"
+    num_ctx: int = Field(default=8192, ge=8192)
+    max_output_tokens: int = Field(default=400, gt=0)
+    request_timeout_seconds: int = Field(default=300, gt=0)
+    fallback_to_extractive: bool = True
+    chars_per_token: float = Field(default=3.0, gt=0.0)
+
+
+class GenerationConfig(_Strict):
+    context_k: int = Field(gt=0)
+    extractive_sentences: int = Field(gt=0)
+    min_sentence_words: int = Field(ge=1)
+    insufficient_marker: str
+
+
+class RefusalConfig(_Strict):
+    percentile: float = Field(ge=0.0, le=100.0)
+    calibration_queries: int = Field(gt=0)
+    min_query_words: int = Field(ge=1)
+    calibration_file: Path
+
+
+class InjectionConfig(_Strict):
+    patterns: list[str]
+    echo_overlap: float = Field(gt=0.0, le=1.0)
+
+    @field_validator("patterns")
+    @classmethod
+    def _valid_regexes(cls, patterns: list[str]) -> list[str]:
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid regex {pattern!r}: {exc}") from exc
+        return patterns
+
+
+class GenerationEvalConfig(_Strict):
+    bootstrap_samples: int = Field(gt=0)
+    confidence: float = Field(gt=0.0, lt=1.0)
 
 
 class Config(_Strict):
@@ -201,6 +240,10 @@ class Config(_Strict):
     retrieval: RetrievalConfig
     evaluation: RetrievalEvalConfig
     llm: LLMConfig
+    generation: GenerationConfig
+    refusal: RefusalConfig
+    injection: InjectionConfig
+    generation_eval: GenerationEvalConfig
     seed: int = 42
 
 
