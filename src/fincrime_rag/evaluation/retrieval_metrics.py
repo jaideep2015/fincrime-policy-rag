@@ -5,6 +5,7 @@ can span pages). Per question, with hits ranked best first:
 
 * ``any@k``   1 if any of the top k hits covers at least one gold page (the usual "recall@k"),
 * ``frac@k``  share of the gold pages covered by the top k hits (matters for multi-page / multi-doc),
+* ``all@k``   1 if the top k hits cover *every* gold page (only differs from any@k when gold has 2+ pages),
 * ``mrr``     1 / rank of the first hit covering a gold page (0 if none within the retrieved depth),
 * ``hit``     1 if any of the top ``hit_k`` hits is from a gold *document* (page ignored): separates
               "found the right document" from "found the right page".
@@ -40,6 +41,7 @@ def question_metrics(hits: list[RankedHit], gold: Gold, ks: list[int], hit_k: in
             got |= covered(hit, gold)
         out[f"any@{k}"] = 1.0 if got else 0.0
         out[f"frac@{k}"] = len(got) / len(gold)
+        out[f"all@{k}"] = 1.0 if len(got) == len(gold) else 0.0
     out["mrr"] = next((1.0 / r for r, h in enumerate(hits, start=1) if covered(h, gold)), 0.0)
     out["hit"] = 1.0 if any(h.doc_id in gold_docs for h in hits[:hit_k]) else 0.0
     return out
