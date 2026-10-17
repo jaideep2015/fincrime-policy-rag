@@ -39,3 +39,11 @@ Gold pages are PDF page indexes (the `pdf_page` column), not printed numbers.
 OCRs every page once (cached under `.cache/ocr`, so the first run takes a while), compares OCR and text-layer word
 counts. For pages below `ocr.coverage_threshold` it keeps the text layer and adds OCR-only lines (`extraction_method: merged`), or uses OCR text alone when the page has no usable text layer (`ocr`). Reg E model-form pages are tagged `content_type: model_form` and excluded from the index by default (`indexing.exclude_content_types`).
 `python -m fincrime_rag.ocr` warms the cache on its own; `--no-ocr` on extraction skips all of it.
+
+## Chunking (Phase 2)
+```bash
+python -m fincrime_rag.chunking [--doc DOC_ID]   # data/processed/<doc_id>.pages.jsonl -> <doc_id>.chunks.jsonl
+```
+Recursive, page-aware chunks of 512 tokens with 64 overlap (config `chunking:`; D-019). Each chunk keeps `doc_id`,
+`pdf_pages`, `printed_page_guess`, `section_hint`, `content_type`, `chunk_id`; CFR chunks also get a `section`.
+The first run downloads the BAAI/bge-small-en-v1.5 tokenizer (Hugging Face cache).

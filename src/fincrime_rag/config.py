@@ -119,29 +119,65 @@ class ChunkingConfig(_Strict):
     strategy: Literal["recursive", "section_aware"] = "recursive"
     chunk_size: int = Field(gt=0)
     chunk_overlap: int = Field(ge=0)
+    special_tokens: int = Field(ge=0)
+    separators: list[str]
+    min_chunk_tokens: int = Field(ge=0)
+    section_doc_prefixes: list[str] = []
+    section_heading_patterns: list[str] = []
 
     @model_validator(mode="after")
     def _overlap_smaller_than_size(self) -> ChunkingConfig:
-        if self.chunk_overlap >= self.chunk_size:
-            raise ValueError("chunk_overlap must be smaller than chunk_size")
+        if self.chunk_overlap >= self.chunk_size - self.special_tokens:
+            raise ValueError("chunk_overlap must be smaller than chunk_size - special_tokens")
         return self
+
+    @field_validator("section_heading_patterns")
+    @classmethod
+    def _valid_patterns(cls, patterns: list[str]) -> list[str]:
+        for pattern in patterns:
+            try:
+                compiled = re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid regex {pattern!r}: {exc}") from exc
+            if "section" not in compiled.groupindex:
+                raise ValueError(f"pattern {pattern!r} needs a named group `section`")
+        return patterns
 
 
 class EmbeddingConfig(_Strict):
     provider: Literal["local"] = "local"
     model: str
     batch_size: int = Field(gt=0)
+    max_seq_length: int = Field(gt=0)
+    normalize: bool = True
+    query_instruction: str = ""
 
 
 class VectorStoreConfig(_Strict):
     backend: Literal["chroma"] = "chroma"
     collection: str
+    space: Literal["cosine", "l2", "ip"] = "cosine"
 
 
 class RetrievalConfig(_Strict):
     mode: Literal["dense", "bm25", "hybrid"] = "dense"
     top_k: int = Field(gt=0)
     hybrid_rrf_k: int = Field(gt=0)
+    candidate_pool: int = Field(gt=0)
+    bm25_k1: float = Field(gt=0.0)
+    bm25_b: float = Field(ge=0.0, le=1.0)
+
+
+class RetrievalEvalConfig(_Strict):
+    retrieval_ks: list[int]
+    splits: list[Literal["dev", "test"]]
+
+    @field_validator("retrieval_ks")
+    @classmethod
+    def _positive_sorted(cls, ks: list[int]) -> list[int]:
+        if not ks or any(k < 1 for k in ks) or ks != sorted(set(ks)):
+            raise ValueError("retrieval_ks must be a sorted list of distinct positive integers")
+        return ks
 
 
 class LLMConfig(_Strict):
@@ -163,6 +199,7 @@ class Config(_Strict):
     embedding: EmbeddingConfig
     vectorstore: VectorStoreConfig
     retrieval: RetrievalConfig
+    evaluation: RetrievalEvalConfig
     llm: LLMConfig
     seed: int = 42
 
