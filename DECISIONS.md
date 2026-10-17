@@ -36,6 +36,7 @@ Log of design choices. Format: date, options considered, choice, why, how to rev
 ## D-007 Eval set is user-written (2026-10-12)
 - **Choice:** 20 starter questions (Phase 1.5), growing to 40-60 (~10 unanswerable, ~5 injection). Claude does not write or edit them.
 - **Why:** Avoids leakage and keeps ground truth independent of the system under test.
+- **Provenance:** Questions were drafted and cross-checked with an AI assistant outside Claude Code, from the PDFs only (no retrieval output), then reviewed and edited by the author. Claude Code did not write or edit them.
 
 ## D-008 Corpus and repo (2026-10-12)
 - **Choice:** 10-15 documents (Reg E plus several FinCEN/FATF reports). Public repo contains manifest + download script only; PDFs are gitignored.
@@ -84,3 +85,12 @@ Log of design choices. Format: date, options considered, choice, why, how to rev
 ## D-017 printed_page_guess sanity check (2026-10-14)
 - **Choice:** per document, the modal (printed - PDF page) offset over numeric guesses is computed (needs 3+ numeric guesses, with the mode on at least half of them); guesses that deviate are set to None and the original kept in `printed_page_guess_rejected`. Non-numeric guesses ("F-1") are left alone. The QA report shows how many were nulled per document.
 - **Why:** stray numbers read from covers or figures (FATF 2020 had "10" and "19" at an offset of 9 and 16 against the document's -2) would otherwise show up in citations.
+
+## D-018 Eval set schema and validator (2026-10-14)
+- **Choice:** `data/eval/qa_set.jsonl`, one JSON object per line. Fields: `qid` (unique), `question`, `type` (`answerable` | `unanswerable` | `injection`), `expected_behavior` (`answer` | `refuse` | `resist_injection`, tied one-to-one to `type`), `category` (`lookup`, `definition`, `list`, `numeric`, `multi_page`, `multi_doc`, `conflict`, `paraphrase`, `false_premise`, `out_of_corpus`, `injection`), `gold` (list of `{doc_id, pages}` with PDF page indexes; empty for unanswerable and injection), `reference_answer`, `key_facts` (1-4 short strings), `split` (`dev` | `test`, required), optional `notes`. The 20 starter questions are all `dev`; the held-out `test` split is written in Phase 6.
+- **Validator** (`python -m fincrime_rag.evalset validate`, limits in `config.yaml` `evalset:`):
+  - errors: duplicate qid or question (compared after normalising case and punctuation), invalid enum values, type/expected_behavior mismatch, unknown doc_id, page outside the PDF's page count, non-integer or duplicate pages, empty gold for answerable or non-empty gold otherwise, key_facts outside 1-4, missing or unknown fields, bad JSON lines;
+  - warnings (do not fail): a gold page in a non-body page (e.g. Reg E model forms), more than 3 questions on one document, a document with no questions, `multi_doc` with fewer than two gold documents, `multi_page` with no document having two or more gold pages;
+  - summary counts by type, category, split and document.
+- **Page lookup:** `python -m fincrime_rag.evalset pages <doc_id>` prints `pdf_page`, `page_label`, `printed_page_guess` and `content_type`, never page text, so PDF indexes and printed numbers are not confused. Gold pages are always PDF indexes.
+- **Independence:** only `qa_set.jsonl` is read (the format example is a `.md` file the validator ignores); reports name qids, fields, doc_ids and counts but never repeat question, answer, key-fact or note text. Nothing in the pipeline is tuned against the eval set, and Claude does not write, edit or suggest questions.

@@ -103,6 +103,18 @@ class QAConfig(_Strict):
     flag_min_chars_per_page: int = Field(ge=0)
 
 
+class EvalSetConfig(_Strict):
+    max_questions_per_doc: int = Field(gt=0)
+    min_key_facts: int = Field(ge=1)
+    max_key_facts: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> EvalSetConfig:
+        if self.max_key_facts < self.min_key_facts:
+            raise ValueError("max_key_facts must be >= min_key_facts")
+        return self
+
+
 class ChunkingConfig(_Strict):
     strategy: Literal["recursive", "section_aware"] = "recursive"
     chunk_size: int = Field(gt=0)
@@ -146,6 +158,7 @@ class Config(_Strict):
     cleaning: CleaningConfig
     indexing: IndexingConfig
     qa: QAConfig
+    evalset: EvalSetConfig
     chunking: ChunkingConfig
     embedding: EmbeddingConfig
     vectorstore: VectorStoreConfig

@@ -26,6 +26,14 @@ python -m fincrime_rag.qa                   # -> reports/extraction_qa.md, data/
 FATF and FFIEC block scripted downloads: save those four PDFs by hand under the filenames in `data/manifest.csv`
 (`source=manual`), then run `verify`.
 
+## Eval set (Phase 1.5)
+The questions are hand-written in `data/eval/qa_set.jsonl` (format example: `data/eval/EXAMPLE_FORMAT.md`).
+```bash
+python -m fincrime_rag.evalset validate         # schema check + counts; exit 1 on errors
+python -m fincrime_rag.evalset pages <doc_id>   # pdf_page / page_label / printed_page_guess (no page text)
+```
+Gold pages are PDF page indexes (the `pdf_page` column), not printed numbers.
+
 ## OCR (coverage check and fallback)
 `pip install -e ".[ocr]"` installs RapidOCR (pip-only, models bundled). `python -m fincrime_rag.extraction`
 OCRs every page once (cached under `.cache/ocr`, so the first run takes a while), compares OCR and text-layer word

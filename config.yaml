@@ -76,6 +76,12 @@ qa:
   odd_token_ignore_acronyms: true # all-caps tokens (CMLN, NMLRA, TCOs) are acronyms, not garble
   flag_min_chars_per_page: 400    # median chars/page below this is suspicious
 
+evalset:
+  # Validator limits for data/eval/qa_set.jsonl (schema in DECISIONS.md D-018)
+  max_questions_per_doc: 3        # warn when more questions than this have a document in their gold
+  min_key_facts: 1
+  max_key_facts: 4
+
 chunking:
   strategy: recursive        # recursive | (stretch) section_aware
   chunk_size: 512            # tokens
