@@ -1,7 +1,10 @@
 """Shared fixtures: a tiny generated PDF with known headers, footers, labels, and a blank page."""
 
+import hashlib
+import re
 from pathlib import Path
 
+import numpy as np
 import pymupdf
 import pytest
 
@@ -87,3 +90,59 @@ def extract_fixture_pages(pdf: Path) -> list[dict]:
     from fincrime_rag.extraction import extract_pdf
 
     return extract_pdf(pdf, "fx")
+
+
+# ---- index / retrieval fakes (no model download) ----
+DIM = 64
+
+
+class FakeEmbedder:
+    """Hashed bag-of-words, L2-normalised. Counts calls so cache behaviour can be checked."""
+
+    name = "fake"
+
+    def __init__(self):
+        self.calls = 0
+
+    def _vec(self, text: str) -> np.ndarray:
+        v = np.zeros(DIM, dtype=np.float32)
+        for tok in re.findall(r"[a-z0-9]+", text.lower()):
+            v[int(hashlib.md5(tok.encode()).hexdigest(), 16) % DIM] += 1.0
+        n = np.linalg.norm(v)
+        return v / n if n else v
+
+    def embed_documents(self, texts):
+        self.calls += len(texts)
+        return np.vstack([self._vec(t) for t in texts])
+
+    def embed_query(self, text):
+        return self._vec(text)
+
+
+def chunk(cid, doc, pages, text, section=None):
+    return {
+        "chunk_id": cid,
+        "doc_id": doc,
+        "pdf_pages": pages,
+        "printed_page_guess": str(pages[0] + 1),
+        "section": section,
+        "section_hint": None,
+        "content_type": "body",
+        "n_tokens": len(text.split()),
+        "text_hash": hashlib.sha256(text.encode()).hexdigest(),
+        "text": text,
+    }
+
+
+CHUNKS = [
+    chunk("a:p1:c0", "a", [1], "money mule accounts receive and forward illicit funds quickly"),
+    chunk("a:p2:c1", "a", [2, 3], "elder financial exploitation red flags include sudden account changes"),
+    chunk("b:p1:c0", "b", [1], "section 1005.11 error resolution procedures for consumers", "1005.11"),
+    chunk("b:p5:c1", "b", [5], "suspicious activity reports must be filed within thirty calendar days"),
+]
+
+
+@pytest.fixture()
+def index_cfg(cfg, tmp_path):
+    paths = cfg.paths.model_copy(update={"index_dir": tmp_path / "chroma", "cache_dir": tmp_path / "cache"})
+    return cfg.model_copy(update={"paths": paths})

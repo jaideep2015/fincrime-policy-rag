@@ -103,3 +103,10 @@ Log of design choices. Format: date, options considered, choice, why, how to rev
 - **Known limits:** a short section can start and end inside one chunk and so never appears as a chunk's `section`; a cross-reference wrapped onto a line of its own (for example `§ 1004.4`) can be mistaken for a heading (one such chunk in Reg E). `section` is metadata only; retrieval does not use it.
 - **Result:** 696 chunks over 15 documents, median 480 tokens, maximum 510.
 - **Revisit:** change `chunking:` in `config.yaml` and run `make index`; the grid over size and overlap is Phase 7.
+
+## D-020 Embeddings, cache and Chroma index (2026-10-17)
+- **Choice:** BAAI/bge-small-en-v1.5 on CPU via sentence-transformers (D-002), normalised vectors, bge's query instruction prepended to queries only (`embedding.query_instruction`). `Embedder` is a small interface; `CachedEmbedder` stores one vector per sha256(model + text) under `.cache/embeddings/<model>/`, so a rebuild with unchanged chunks computes nothing (first full build of 696 chunks: about 3 minutes on this CPU; the second: 696 cached, 0 computed).
+- **Index:** Chroma `PersistentClient` in `chroma_db/`, one collection, cosine space, `chunk_id` as id. `build_index` drops and recreates the collection from the chunk files, so it is idempotent and cannot leave stale entries. Chroma metadata cannot hold lists, so `pdf_pages` is stored as "4,5" plus integer first/last page.
+- **One command:** `make index` (re-chunk, then build); where `make` is not installed, `python -m fincrime_rag.chunking && python -m fincrime_rag.vectorstore build`.
+- **Environment:** `pip install --dry-run sentence-transformers chromadb rank_bm25` resolved on Python 3.14.8 (torch 2.14.1, chromadb 1.5.9), so no 3.12 venv was needed.
+- **Revisit:** swap `embedding.model` and rebuild (the cache is keyed by model, so models do not collide); the embedding-model comparison is the Phase 7b stretch.

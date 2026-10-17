@@ -47,3 +47,10 @@ python -m fincrime_rag.chunking [--doc DOC_ID]   # data/processed/<doc_id>.pages
 Recursive, page-aware chunks of 512 tokens with 64 overlap (config `chunking:`; D-019). Each chunk keeps `doc_id`,
 `pdf_pages`, `printed_page_guess`, `section_hint`, `content_type`, `chunk_id`; CFR chunks also get a `section`.
 The first run downloads the BAAI/bge-small-en-v1.5 tokenizer (Hugging Face cache).
+
+## Embeddings and index (Phase 3)
+```bash
+make index                                  # chunk, embed (cached by chunk hash), rebuild chroma_db/ (idempotent)
+python -m fincrime_rag.vectorstore build    # same without make (run the chunking command first)
+python -m fincrime_rag.vectorstore info     # chunk count in the index
+```
