@@ -108,7 +108,7 @@ vectorstore:
   space: cosine              # cosine | l2 | ip (embeddings are normalised)
 
 retrieval:
-  mode: dense                # dense | bm25 | hybrid
+  mode: hybrid               # dense | bm25 | hybrid (default picked from aggregate dev metrics, D-021)
   top_k: 5
   hybrid_rrf_k: 60
   candidate_pool: 50         # depth taken from each ranker before fusion

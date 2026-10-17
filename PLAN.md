@@ -29,9 +29,9 @@ Dockerfile, pre-commit and GitHub Actions arrive in Phase 9.
 | 0 Scaffold | Layout, pyproject (ruff + pytest only), config loader, .env.example, .gitignore, PLAN/CLAUDE/DECISIONS, README stub | `ruff check` and `pytest` pass; config.yaml loads and validates; no secrets in repo; files explained |
 | 1 Ingestion, extraction, cleaning | Manifest download with sha256; PyMuPDF per-page text; cleaning; extraction QA stats | Per-page text with page numbers preserved; QA table reviewed; 5 pages spot-checked; tests on a fixture PDF |
 | 1.5 Starter eval set | **User writes** 20 questions (all `split: dev`; the held-out `test` split is written in Phase 6). Claude builds only the validator (`python -m fincrime_rag.evalset validate`), a read-only page lookup (`... pages <doc_id>`) and `data/eval/EXAMPLE_FORMAT.md` | `qa_set.jsonl` passes validation with no errors (schema in D-018: qid, question, type, expected_behavior, category, gold [{doc_id, pages}], reference_answer, key_facts, split, notes); warnings reviewed; nobody tunes anything against the file |
-| 2 Chunking | Recursive page-aware chunker; chunk metadata | Deterministic; every chunk maps to doc + page; user confirms baseline |
-| 3 Embeddings + index | Embedder interface + cache; Chroma build | One-command idempotent build; sanity queries plausible; decision logged |
-| 4 Retrieval | Dense, BM25, hybrid (RRF); common `retrieve()` | LLM-free recall@k, MRR, hit-rate on the 20-question set |
+| 2 Chunking (done) | Recursive page-aware chunker; chunk metadata | Deterministic; every chunk maps to doc + page; user confirms baseline |
+| 3 Embeddings + index (done) | Embedder interface + cache; Chroma build | One-command idempotent build; sanity queries plausible; decision logged |
+| 4 Retrieval (done) | Dense, BM25, hybrid (RRF); common `retrieve()` | LLM-free recall@k, MRR, hit-rate on the 20-question set |
 | 5 Generation + guardrails | `LLMClient` (ollama default, anthropic optional/off), prompt, citation parsing/validation, refusal on weak retrieval, injection handling | User picks the Ollama model from 2-3 options; answers cite or refuse; injection cases pass |
 | 6 Evaluation harness | LLM-free retrieval metrics; faithfulness and answer relevance via local judge; refusal accuracy | Deterministic and cached; judge agreement vs user's manual labels reported; eval set grown to 40-60 |
 | 7 Experiments (core) | Chunk size/overlap grid; dense vs hybrid | Results in experiments/results/<run_id>/ with config snapshot; bootstrap CIs |

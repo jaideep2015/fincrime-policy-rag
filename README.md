@@ -54,3 +54,14 @@ make index                                  # chunk, embed (cached by chunk hash
 python -m fincrime_rag.vectorstore build    # same without make (run the chunking command first)
 python -m fincrime_rag.vectorstore info     # chunk count in the index
 ```
+
+## Retrieval and evaluation (Phase 4)
+```python
+from fincrime_rag.retrieval import retrieve
+hits = retrieve("What triggers a SAR filing?", k=5, mode="hybrid")   # dense | bm25 | hybrid (default from config)
+# each hit: rank, score, chunk_id, doc_id, pdf_pages, printed_page_guess, section, text
+```
+```bash
+python -m fincrime_rag.evaluate retrieval   # LLM-free recall@1/3/5/10, MRR, hit rate -> reports/retrieval_results.md
+```
+Only aggregate metrics are printed. Details and definitions: D-021.
