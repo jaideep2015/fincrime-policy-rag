@@ -46,6 +46,9 @@ class Answer:
     fallback: bool = False
     fallback_reason: str | None = None
     prompt_tokens_estimate: int | None = None
+    prompt_eval_count: int | None = None
+    cached: bool = False
+    raw_text: str | None = None  # the backend's reply before citation validation
 
     @property
     def refused(self) -> bool:
@@ -87,6 +90,9 @@ class RAGPipeline:
             "num_ctx": response.num_ctx,
             "fallback": response.fallback,
             "fallback_reason": response.fallback_reason,
+            "prompt_eval_count": response.prompt_eval_count,
+            "cached": response.cached,
+            "raw_text": response.text,
             "prompt_tokens_estimate": tokens,
         }
         if is_insufficient(response.text, self.cfg.generation.insufficient_marker):
@@ -119,7 +125,9 @@ def load_page_text_lookup(cfg: Config):
     return lookup
 
 
-def build_llm(cfg: Config, backend: str, page_text=None) -> LLMClient:
+def build_llm(
+    cfg: Config, backend: str, page_text=None, require_count: bool = True, cache_only: bool = False
+) -> LLMClient:
     """``extractive``: no LLM. ``ollama``: the configured model, falling back to extractive if unreachable."""
     from fincrime_rag.llm import FallbackClient
     from fincrime_rag.llm.extractive import ExtractiveClient
@@ -130,7 +138,7 @@ def build_llm(cfg: Config, backend: str, page_text=None) -> LLMClient:
         return extractive
     if backend != "ollama":
         raise ValueError(f"unknown backend {backend!r}")
-    ollama = OllamaClient(cfg)
+    ollama = OllamaClient(cfg, require_count=require_count, cache_only=cache_only)
     return FallbackClient(ollama, extractive) if cfg.llm.fallback_to_extractive else ollama
 
 

@@ -33,6 +33,7 @@ class LLMResponse:
     fallback: bool = False  # True when this backend replaced an unreachable primary
     fallback_reason: str | None = None
     cached: bool = False
+    prompt_eval_count: int | None = None  # tokens Ollama actually evaluated for the prompt
 
 
 class LLMClient(Protocol):

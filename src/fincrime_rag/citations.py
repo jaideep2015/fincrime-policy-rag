@@ -70,4 +70,34 @@ def validate_citations(text: str, chunks: list[dict]) -> CitationCheck:
         return match.group(0) if good and len(good) == len(cites) else ""
 
     cleaned = re.sub(r"[ \t]{2,}", " ", CITATION.sub(keep, text)).strip()
-    return CitationCheck(valid, invalid, cleaned)
+    # identical citations are counted once everywhere (order kept)
+    return CitationCheck(list(dict.fromkeys(valid)), list(dict.fromkeys(invalid)), cleaned)
+
+
+# Lenient reading (reported next to the strict bracket format, never the primary metric): also "(doc_id p.N)".
+LENIENT = re.compile(
+    r"\(\s*(?P<doc>[A-Za-z0-9_]+)\s+p\.?\s*(?P<pages>\d+(?:\s*(?:,|-|–|and)\s*\d+)*)\s*\)",
+    re.IGNORECASE,
+)
+
+
+def lenient_valid_citations(text: str, chunks: list[dict]) -> list[Citation]:
+    allowed = context_pages(chunks)
+    found: list[Citation] = []
+    for pattern in (CITATION, LENIENT):
+        for match in pattern.finditer(text):
+            found.extend(
+                Citation(match.group("doc"), p)
+                for p in _expand(match.group("pages"))
+                if (match.group("doc"), p) in allowed
+            )
+    return list(dict.fromkeys(found))
+
+
+def strip_citation_text(text: str, doc_ids: list[str]) -> str:
+    """Answer text without citation tags, ``cite_as`` labels and document ids (for keyword/year checks)."""
+    text = LENIENT.sub(" ", CITATION.sub(" ", text))
+    text = re.sub(r"cite_as\s*:?", " ", text, flags=re.IGNORECASE)
+    for doc_id in sorted(doc_ids, key=len, reverse=True):
+        text = text.replace(doc_id, " ")
+    return re.sub(r"\s+", " ", text).strip()

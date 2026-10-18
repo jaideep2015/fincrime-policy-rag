@@ -76,3 +76,9 @@ python scripts/eval_generation.py                      # -> reports/generation_r
 Context k = 8 (D-022). The `ollama` backend needs a running Ollama server with `qwen2.5:3b-instruct` pulled;
 if the server is unreachable the pipeline falls back to the extractive backend and records that it did.
 All 20 eval questions are dev; there is no held-out split. See D-022 to D-025.
+
+Ollama run: `python scripts/eval_generation.py [--ollama-ablation]` (the ablation adds Ollama with dense retrieval, about 20 more
+minutes on CPU). Model replies are cached under `.cache/llm/` keyed by prompt hash; delete it to measure latency again.
+The first Ollama run (prompt v1) is kept in `reports/generation_results_ollama_prompt_v1.md`; see D-027.
+Live injection probe (not part of the eval set): `python scripts/probe_injection.py` (needs Ollama; writes `reports/injection_probe_results.json`).
+The dev answers for review are written to `reports/answers_dev_ollama_v2.md` by `scripts/eval_generation.py`.

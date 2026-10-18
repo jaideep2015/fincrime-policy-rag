@@ -81,12 +81,13 @@ def test_prompt_delimits_and_neutralizes_tags():
     prompt = build_user_prompt("What is x?", chunks)
     assert prompt.count("<chunk ") == 1 and prompt.count("</chunk>") == 1
     assert prompt.count("<question>") == 1 and 'pages="1, 2"' in prompt
+    assert 'cite_as="[d p.1] [d p.2]"' in prompt and "Reminder" in prompt
     assert neutralize("a <chunk n=1> b") == "a  b"
 
 
 def test_system_prompt_carries_the_rules(cfg):
     s = system_prompt(cfg)
-    for needle in (cfg.generation.insufficient_marker, "[doc_id p.N]", "DATA", "most recent"):
+    for needle in (cfg.generation.insufficient_marker, "cite_as", "DATA", "most recent"):
         assert needle in s
 
 
@@ -171,7 +172,7 @@ def test_ollama_sends_explicit_options_records_digest_and_caches(cfg, tmp_path):
 
         def post(self, url, json, timeout):
             self.posted.append(json)
-            return Resp({"message": {"content": "answer [a p.1]"}})
+            return Resp({"message": {"content": "answer [a p.1]"}, "prompt_eval_count": 1234})
 
     session = Session()
     client = OllamaClient(cfg, session=session)
@@ -315,3 +316,184 @@ def test_bootstrap_is_deterministic_and_brackets_the_mean():
 
 def test_key_fact_normalisation():
     assert norm("  Thirty   Calendar Days ") == "thirty calendar days"
+
+
+# ---------------------------------------------------------------- report helpers (B2)
+def test_states_newer_rule_pattern_and_year():
+    from fincrime_rag.evaluation.generation_eval import count_entry, states_newer_rule
+
+    assert states_newer_rule("The more recent guidance supersedes the older one.", None)
+    assert states_newer_rule("Under the 2025 position, file within 30 days.", "2025")
+    assert not states_newer_rule("File within 30 days.", "2025")
+    assert count_entry(2, 4)[4] == "2 of 4" and count_entry(0, 0)[1] == 0
+
+
+def test_newest_doc_uses_manifest_dates_not_names(cfg, tmp_path):
+    from fincrime_rag.evaluation.generation_eval import newest_doc, newest_year
+    from fincrime_rag.ingestion import MANIFEST_FIELDS
+
+    rows = [
+        {"doc_id": "zzz_old", "date": "2021-01-19"},
+        {"doc_id": "aaa_new", "date": "2025-10-09"},
+        {"doc_id": "nodate", "date": ""},
+    ]
+    import csv
+
+    with open(cfg.paths.manifest, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r.get(k, "manual" if k == "source" else "") for k in MANIFEST_FIELDS})
+    assert newest_doc(cfg, {"zzz_old", "aaa_new"}) == "aaa_new"
+    assert newest_doc(cfg, {"zzz_old", "nodate"}) is None
+    assert newest_year(cfg, "aaa_new") == "2025"
+
+
+# ---------------------------------------------------------------- truncation check, probe strings (D-028)
+def _ollama_session(cfg, evaluated):
+    class Resp:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.payload
+
+    class Session:
+        posts = 0
+
+        def get(self, url, timeout):
+            return Resp({"models": [{"name": cfg.llm.model, "digest": "d1"}]})
+
+        def post(self, url, json, timeout):
+            Session.posts += 1
+            payload = {"message": {"content": "ok [a p.1]"}}
+            if evaluated is not None:
+                payload["prompt_eval_count"] = evaluated
+            return Resp(payload)
+
+    return Session
+
+
+def test_prompt_eval_count_must_be_below_context_minus_output(cfg, tmp_path):
+    from fincrime_rag.llm.ollama_client import PromptTruncatedError
+
+    cfg = cfg.model_copy(update={"paths": cfg.paths.model_copy(update={"cache_dir": tmp_path})})
+    limit = cfg.llm.num_ctx - cfg.llm.max_output_tokens
+    req = GenerationRequest("sys", "user", "q", [])
+    ok = OllamaClient(cfg, session=_ollama_session(cfg, limit - 1)()).generate(req)
+    assert ok.prompt_eval_count == limit - 1
+    with pytest.raises(PromptTruncatedError):
+        OllamaClient(cfg, session=_ollama_session(cfg, limit)()).generate(
+            GenerationRequest("s2", "u2", "q", [])
+        )
+
+
+def test_cached_reply_without_count_is_a_miss_when_count_required(cfg, tmp_path):
+    cfg = cfg.model_copy(update={"paths": cfg.paths.model_copy(update={"cache_dir": tmp_path})})
+    session_cls = _ollama_session(cfg, None)
+    req = GenerationRequest("sys", "user", "q", [])
+    OllamaClient(cfg, session=session_cls(), require_count=False).generate(req)
+    assert session_cls.posts == 1
+    OllamaClient(cfg, session=session_cls(), require_count=False).generate(req)
+    assert session_cls.posts == 1  # cached, count not required
+    OllamaClient(cfg, session=session_cls(), require_count=True).generate(req)
+    assert session_cls.posts == 2  # no recorded count: regenerated
+
+
+def test_probe_strings_are_detected_as_instructions(cfg):
+    from synthetic_injections import CHUNK_INJECTION, QUESTION_INJECTION, QUESTION_INJECTION_2
+
+    detector = InjectionDetector(cfg.injection)
+    assert all(detector.matches(x) for x in (QUESTION_INJECTION, QUESTION_INJECTION_2, CHUNK_INJECTION))
+
+
+def test_refusal_path_and_conflict_strictness():
+    from fincrime_rag.evaluation.generation_eval import STATES_NEWER_PATTERN, refusal_path
+    from fincrime_rag.generation import Answer
+
+    assert refusal_path(Answer("refused", "", "low_retrieval_score")) == "score gate"
+    assert refusal_path(Answer("refused", "", "model_insufficient")) == "INSUFFICIENT_CONTEXT"
+    assert refusal_path(Answer("rejected_injection", "")) == "output check"
+    assert refusal_path(Answer("answered", "x")) == "none"
+    assert not STATES_NEWER_PATTERN.search(
+        "Under the 2025 rule banks file within 30 days."
+    )  # year alone is not a word
+
+
+# ---------------------------------------------------------------- follow-up 2: bug fix, lenient parsing, support
+def test_identical_citations_are_counted_once():
+    check = validate_citations("A [doc_a p.4]. B [doc_a p.4]. C [doc_a p.9] [doc_a p.9].", CTX)
+    assert [(c.doc_id, c.page) for c in check.valid] == [("doc_a", 4)]
+    assert [(c.doc_id, c.page) for c in check.invalid] == [("doc_a", 9)]
+
+
+def test_lenient_parsing_is_separate_from_strict():
+    from fincrime_rag.citations import lenient_valid_citations
+
+    text = "Claim (doc_a p.4). Other claim."
+    assert not validate_citations(text, CTX).grounded  # strict: bracket format only
+    assert [(c.doc_id, c.page) for c in lenient_valid_citations(text, CTX)] == [("doc_a", 4)]
+    assert lenient_valid_citations("Claim (doc_a p.99) (nope p.1).", CTX) == []
+
+
+def test_conflict_year_check_ignores_year_inside_citation_tag():
+    from fincrime_rag.citations import strip_citation_text
+    from fincrime_rag.evaluation.generation_eval import states_newer_rule
+
+    doc = "fincen_2025_sar_faqs"
+    text = f"Banks may file once for continuing activity [{doc} p.3]. See {doc}."
+    assert states_newer_rule(text, "2025")  # the bug: the year matched inside the tag / doc id
+    cleaned = strip_citation_text(text, [doc, "other_doc"])
+    assert "2025" not in cleaned and "p.3" not in cleaned
+    assert not states_newer_rule(cleaned, "2025")
+    assert states_newer_rule(
+        strip_citation_text("The 2025 guidance supersedes it [" + doc + " p.3].", [doc]), "2025"
+    )
+
+
+def test_citation_support_numeric_and_overlap():
+    from fincrime_rag.evaluation.citation_support import cited_sentences, support_pairs
+
+    pages = {
+        ("d", 3): "Two banks reported 33 percent of the 129,483 filings in the dataset.",
+        ("d", 4): "Unrelated text here.",
+    }
+    lookup = lambda doc, page: pages.get((doc, page))  # noqa: E731
+    text = "Two banks reported 33 percent of filings [d p.3]. They filed 129,483 reports [d p.4]. [d p.3]"
+    valid = {("d", 3), ("d", 4)}
+    sentences_ = cited_sentences(text, valid)
+    assert len(sentences_) == 2 and {c.page for c in sentences_[1][1]} == {
+        3,
+        4,
+    }  # tag-only segment joins previous
+    pairs = support_pairs(text, valid, lookup)
+    by = {(p.page, p.numeric_ok) for p in pairs}
+    assert (3, True) in by and (4, False) in by
+    assert all(p.overlap is not None for p in pairs)
+    assert len(pairs) == len({(p.doc_id, p.page, p.overlap, p.numeric_ok) for p in pairs}) or len(pairs) >= 2
+
+
+def test_support_pairs_dedupe_and_no_number_is_not_counted():
+    from fincrime_rag.evaluation.citation_support import numeric_containment, support_pairs
+
+    assert numeric_containment("No digits at all here", "page 5") is None
+    assert numeric_containment("Over 1,000 cases", "there were 1000 cases") is True  # commas ignored
+    text = "Mule accounts forward funds [d p.1]. Mule accounts forward funds [d p.1]."
+    assert len(support_pairs(text, {("d", 1)}, lambda d, p: "mule accounts forward funds")) == 1
+
+
+def test_cache_only_never_calls_the_model(cfg, tmp_path):
+    from fincrime_rag.llm.ollama_client import CacheMissError
+
+    cfg = cfg.model_copy(update={"paths": cfg.paths.model_copy(update={"cache_dir": tmp_path})})
+    session_cls = _ollama_session(cfg, 100)
+    req = GenerationRequest("sys", "user", "q", [])
+    with pytest.raises(CacheMissError):
+        OllamaClient(cfg, session=session_cls(), cache_only=True).generate(req)
+    assert session_cls.posts == 0
+    OllamaClient(cfg, session=session_cls()).generate(req)  # populate
+    cached = OllamaClient(cfg, session=session_cls(), cache_only=True).generate(req)
+    assert cached.cached and session_cls.posts == 1

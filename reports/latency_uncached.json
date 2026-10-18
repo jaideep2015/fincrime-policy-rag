@@ -1,0 +1,7 @@
+{
+  "Ollama v2 (hybrid)": {
+    "median": 53.5,
+    "max": 70.7,
+    "note": "transcribed by hand from the run summary printed at the time of the uncached run, not from a saved log; not independently reproducible"
+  }
+}

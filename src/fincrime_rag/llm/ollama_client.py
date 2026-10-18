@@ -20,10 +20,29 @@ from fincrime_rag.llm.base import GenerationRequest, LLMResponse, LLMUnavailable
 AVAILABILITY_TIMEOUT_SECONDS = 3
 
 
+class PromptTruncatedError(RuntimeError):
+    """Ollama evaluated so many prompt tokens that the prompt (plus the answer budget) may have been cut."""
+
+
+class CacheMissError(RuntimeError):
+    """cache_only mode and no usable cached reply: nothing is generated."""
+
+
 class OllamaClient:
     backend = "ollama"
 
-    def __init__(self, cfg: Config, session: requests.Session | None = None):
+    def __init__(
+        self,
+        cfg: Config,
+        session: requests.Session | None = None,
+        require_count: bool = True,
+        cache_only: bool = False,
+    ):
+        # cache_only: never call the model; a cache miss raises (recompute reports without regenerating)
+        self._cache_only = cache_only
+        # require_count: a cached reply without a recorded prompt_eval_count is treated as a miss, so the
+        # truncation check is always backed by a real measurement.
+        self._require_count = require_count
         if not cfg.llm.model:
             raise ValueError("llm.model must name an Ollama model")
         self._cfg = cfg.llm
@@ -71,8 +90,12 @@ class OllamaClient:
         digest = self.check_available()
         path = self._cache_path(digest, request)
         if path.exists():
-            text = json.loads(path.read_text(encoding="utf-8"))["text"]
-            return self._response(text, digest, cached=True)
+            entry = json.loads(path.read_text(encoding="utf-8"))
+            if entry.get("prompt_eval_count") is not None or not self._require_count:
+                self._check_untruncated(entry.get("prompt_eval_count"))
+                return self._response(entry["text"], digest, True, entry.get("prompt_eval_count"))
+        if self._cache_only:
+            raise CacheMissError("no cached reply and cache_only is set; nothing was generated")
         body = {
             "model": self.model,
             "stream": False,
@@ -87,14 +110,25 @@ class OllamaClient:
                 f"{self._host}/api/chat", json=body, timeout=self._cfg.request_timeout_seconds
             )
             resp.raise_for_status()
-            text = resp.json()["message"]["content"]
+            payload = resp.json()
+            text = payload["message"]["content"]
+            evaluated = payload.get("prompt_eval_count")
         except (requests.RequestException, KeyError, ValueError) as exc:
             raise LLMUnavailable(f"Ollama request failed: {type(exc).__name__}") from exc
+        self._check_untruncated(evaluated)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"text": text}), encoding="utf-8")
-        return self._response(text, digest, cached=False)
+        path.write_text(json.dumps({"text": text, "prompt_eval_count": evaluated}), encoding="utf-8")
+        return self._response(text, digest, False, evaluated)
 
-    def _response(self, text: str, digest: str, cached: bool) -> LLMResponse:
+    def _check_untruncated(self, evaluated: int | None) -> None:
+        """Fail loudly unless prompt_eval_count < num_ctx - max_output_tokens (nothing was cut)."""
+        limit = self._cfg.num_ctx - self._cfg.max_output_tokens
+        if evaluated is not None and evaluated >= limit:
+            raise PromptTruncatedError(
+                f"prompt_eval_count {evaluated} >= num_ctx - max_output_tokens = {limit}"
+            )
+
+    def _response(self, text: str, digest: str, cached: bool, evaluated: int | None) -> LLMResponse:
         return LLMResponse(
             text=text,
             backend=self.backend,
@@ -102,4 +136,5 @@ class OllamaClient:
             model_digest=digest,
             num_ctx=self._cfg.num_ctx,
             cached=cached,
+            prompt_eval_count=evaluated,
         )
