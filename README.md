@@ -7,9 +7,9 @@ no API key is needed.
 
 > **Research demo. It may be wrong, so check the citations. It is not legal or compliance advice.**
 
-![Screenshot placeholder: the owner will add a screenshot of the Streamlit app here](docs/screenshot.png)
+![Streamlit demo: a cited answer](docs/screenshot.png)
 
-*(Screenshot placeholder: add `docs/screenshot.png`.)*
+*Example output (the first question tried, not one of the 20 dev questions). The answer is incomplete, and the cited page (p. 8) does not contain the quoted sentence, which is on p. 9: the kind of attribution error described in the validation report. Check citations against the source.*
 
 ## Headline results (development questions only)
 
@@ -131,4 +131,4 @@ Every design choice, with options and reasons, is in [DECISIONS.md](DECISIONS.md
 
 ## Licence
 
-Not yet chosen (open item for the owner).
+No licence has been granted: all rights reserved. The code is shared here for review as a portfolio project. The source documents are public publications owned by their publishers and are not redistributed in this repository; the two FATF reports require attribution and permission for reproduction.
