@@ -32,12 +32,12 @@ Dockerfile, pre-commit and GitHub Actions arrive in Phase 9.
 | 2 Chunking (done) | Recursive page-aware chunker; chunk metadata | Deterministic; every chunk maps to doc + page; user confirms baseline |
 | 3 Embeddings + index (done) | Embedder interface + cache; Chroma build | One-command idempotent build; sanity queries plausible; decision logged |
 | 4 Retrieval (done) | Dense, BM25, hybrid (RRF); common `retrieve()` | LLM-free recall@k, MRR, hit-rate on the 20-question set |
-| 5 Generation + guardrails | `LLMClient` (ollama default, anthropic optional/off), prompt, citation parsing/validation, refusal on weak retrieval, injection handling | User picks the Ollama model from 2-3 options; answers cite or refuse; injection cases pass |
-| 6 Evaluation harness | LLM-free retrieval metrics; faithfulness and answer relevance via local judge; refusal accuracy | Deterministic and cached; judge agreement vs user's manual labels reported; eval set grown to 40-60 |
-| 7 Experiments (core) | Chunk size/overlap grid; dense vs hybrid | Results in experiments/results/<run_id>/ with config snapshot; bootstrap CIs |
+| 5 Generation + guardrails (done) | `LLMClient` (ollama default, anthropic optional/off), prompt, citation parsing/validation, refusal on weak retrieval, injection handling | User picks the Ollama model from 2-3 options; answers cite or refuse; injection cases pass |
+| 6 Evaluation harness (done) | LLM-free retrieval metrics; faithfulness and answer relevance via local judge; refusal accuracy | Deterministic and cached; judge agreement vs user's manual labels reported; eval set grown to 40-60 |
+| 7 Experiments (core) (done, retrieval only) | Chunk size/overlap grid; dense vs hybrid | Results in experiments/results/<run_id>/ with config snapshot; bootstrap CIs |
 | 7b Stretch (optional, only after core works end to end) | Cross-encoder reranker; section-aware chunking; embedding-model comparison | Each reported separately; core results unaffected |
-| 8 Validation report | reports/rag_validation_report.md with failure analysis and limitations | Numbers traceable to results files; states that a small local judge is noisy and reports its agreement with manual labels |
-| 9 App, packaging, CI | FastAPI, Streamlit, Dockerfile, pre-commit, GitHub Actions (ruff, pytest, docker build; no network/LLM) | `docker run` serves API; CI green |
+| 8 Validation report (done) | reports/rag_validation_report.md with failure analysis and limitations | Numbers traceable to results files; states that a small local judge is noisy and reports its agreement with manual labels |
+| 9 App (done); packaging and CI not yet | FastAPI, Streamlit, Dockerfile, pre-commit, GitHub Actions (ruff, pytest, docker build; no network/LLM) | `docker run` serves API; CI green |
 
 ## Documents to download (verify URLs at download time)
 - FinCEN advisories and SAR guidance: fincen.gov/resources/advisoriesbulletinsfact-sheets; 31 CFR 1020.320 via ecfr.gov

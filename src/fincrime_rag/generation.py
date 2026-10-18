@@ -49,6 +49,7 @@ class Answer:
     prompt_eval_count: int | None = None
     cached: bool = False
     raw_text: str | None = None  # the backend's reply before citation validation
+    context_chunk_ids: list[str] = field(default_factory=list)  # chunks that were in the prompt, best first
 
     @property
     def refused(self) -> bool:
@@ -73,6 +74,7 @@ class RAGPipeline:
         base = {
             "top_similarity": top,
             "retrieved": [(h.doc_id, h.pdf_pages) for h in hits],
+            "context_chunk_ids": [h.chunk_id for h in hits],
             "question_sanitized": sanitized,
             "context_injection": bool(self.detector.context_injections(chunks)),
         }

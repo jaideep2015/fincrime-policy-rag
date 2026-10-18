@@ -29,3 +29,15 @@ def test_metadata_round_trip_keeps_doc_and_pages():
     back = chunk_from_record(original["chunk_id"], original["text"], chunk_to_metadata(original))
     assert (back["doc_id"], back["pdf_pages"], back["printed_page_guess"]) == ("a", [2, 3], "3")
     assert back["section"] is None
+
+
+def test_service_returns_the_chunks_that_were_in_the_prompt(index_cfg):
+    from fincrime_rag.guardrails import RefusalGate
+    from fincrime_rag.retrieval import Retriever
+    from fincrime_rag.service import Resources, ask
+
+    build_index(index_cfg, FakeEmbedder(), CHUNKS)
+    res = Resources(index_cfg, Retriever(index_cfg, FakeEmbedder()), RefusalGate(0.0), lambda doc, page: None)
+    result = ask(res, "money mule accounts forward funds", "extractive")
+    assert result.answer.context_chunk_ids
+    assert [c["chunk_id"] for c in result.chunks] == result.answer.context_chunk_ids

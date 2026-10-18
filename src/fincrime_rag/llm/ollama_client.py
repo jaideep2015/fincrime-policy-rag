@@ -37,7 +37,10 @@ class OllamaClient:
         session: requests.Session | None = None,
         require_count: bool = True,
         cache_only: bool = False,
+        use_cache: bool = True,
     ):
+        # use_cache=False: never read or write the on-disk reply cache (the demo app stores nothing)
+        self._use_cache = use_cache
         # cache_only: never call the model; a cache miss raises (recompute reports without regenerating)
         self._cache_only = cache_only
         # require_count: a cached reply without a recorded prompt_eval_count is treated as a miss, so the
@@ -89,7 +92,7 @@ class OllamaClient:
     def generate(self, request: GenerationRequest) -> LLMResponse:
         digest = self.check_available()
         path = self._cache_path(digest, request)
-        if path.exists():
+        if self._use_cache and path.exists():
             entry = json.loads(path.read_text(encoding="utf-8"))
             if entry.get("prompt_eval_count") is not None or not self._require_count:
                 self._check_untruncated(entry.get("prompt_eval_count"))
@@ -116,6 +119,8 @@ class OllamaClient:
         except (requests.RequestException, KeyError, ValueError) as exc:
             raise LLMUnavailable(f"Ollama request failed: {type(exc).__name__}") from exc
         self._check_untruncated(evaluated)
+        if not self._use_cache:
+            return self._response(text, digest, False, evaluated)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"text": text, "prompt_eval_count": evaluated}), encoding="utf-8")
         return self._response(text, digest, False, evaluated)

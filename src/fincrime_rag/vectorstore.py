@@ -5,7 +5,7 @@ chunk_id as the Chroma id, so running it twice yields the identical index (embed
 on-disk cache). Chroma metadata cannot hold lists, so ``pdf_pages`` is stored as "4,5" and the first
 and last page as integers; ``chunk_from_record`` turns a stored record back into a chunk dict.
 
-Command: ``python -m fincrime_rag.vectorstore build`` (``make index`` also re-chunks first).
+Command: ``python -m fincrime_rag.vectorstore build`` (run ``python -m fincrime_rag.chunking`` first).
 """
 
 from __future__ import annotations
