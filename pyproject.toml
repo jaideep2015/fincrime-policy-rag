@@ -49,3 +49,5 @@ select = ["E", "F", "I", "B", "UP"]
 "tests/*" = ["E501"]  # long literal test data lines
 "src/fincrime_rag/prompting.py" = ["E501"]  # prompt text lines
 "src/fincrime_rag/evaluation/generation_eval.py" = ["E501"]  # report prose lines
+"src/fincrime_rag/experiments.py" = ["E501"]  # report prose lines
+"app/*" = ["E501"]  # UI text lines

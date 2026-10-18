@@ -180,6 +180,34 @@ class RetrievalEvalConfig(_Strict):
         return ks
 
 
+class ChunkSpec(_Strict):
+    chunk_size: int = Field(gt=0)
+    chunk_overlap: int = Field(ge=0)
+
+    @property
+    def name(self) -> str:
+        return f"c{self.chunk_size}_o{self.chunk_overlap}"
+
+
+class ExperimentsConfig(_Strict):
+    work_dir: Path
+    results_json: Path
+    report: Path
+    baseline: ChunkSpec
+    configs: list[ChunkSpec]
+    modes: list[Literal["dense", "bm25", "hybrid"]]
+    ks: list[int]
+    hit_k: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _baseline_in_grid(self) -> ExperimentsConfig:
+        if self.baseline not in self.configs:
+            raise ValueError("experiments.baseline must be one of experiments.configs")
+        if self.ks != sorted(set(self.ks)) or any(k < 1 for k in self.ks):
+            raise ValueError("experiments.ks must be sorted distinct positive integers")
+        return self
+
+
 class LLMConfig(_Strict):
     provider: Literal["ollama", "anthropic"] = "ollama"
     model: str | None = None
@@ -240,6 +268,7 @@ class Config(_Strict):
     retrieval: RetrievalConfig
     evaluation: RetrievalEvalConfig
     llm: LLMConfig
+    experiments: ExperimentsConfig
     generation: GenerationConfig
     refusal: RefusalConfig
     injection: InjectionConfig

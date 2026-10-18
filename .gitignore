@@ -24,6 +24,7 @@ data/processed/*
 
 # Indexes, caches, local model artifacts
 chroma_db/
+data/experiments/
 .cache/
 *.faiss
 
@@ -35,3 +36,6 @@ experiments/results/**/cache/
 Thumbs.db
 .idea/
 .vscode/
+
+# Personal notes, not part of the repository
+understanding_the_rag_pipeline.docx

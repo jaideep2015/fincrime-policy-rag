@@ -159,4 +159,18 @@ generation_eval:
   bootstrap_samples: 2000
   confidence: 0.95
 
+experiments:
+  # Phase 7 retrieval-only grid (D-032). Every configuration uses exact dense search so it is deterministic.
+  work_dir: data/experiments        # chunks and embeddings per configuration (git-ignored)
+  results_json: experiments/results/retrieval_grid.json   # aggregates only
+  report: reports/retrieval_experiments.md
+  baseline: {chunk_size: 512, chunk_overlap: 64}
+  configs:
+    - {chunk_size: 256, chunk_overlap: 32}
+    - {chunk_size: 384, chunk_overlap: 48}
+    - {chunk_size: 512, chunk_overlap: 64}
+  modes: [dense, bm25, hybrid]
+  ks: [1, 3, 5, 8, 10]
+  hit_k: 5                          # doc-level hit rate cut-off
+
 seed: 42
