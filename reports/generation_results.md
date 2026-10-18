@@ -81,7 +81,7 @@ Definitions.
   differs) **or** the newest document's year, tested on the raw text. **Bug (D-029):** that test could match the
   year inside a citation tag, because the doc_id itself contains it. (b-fixed) is the same check after removing
   bracketed citation tags, `cite_as` labels and document ids from the text. **Even fixed, (b) passes on a keyword or
-  a year alone, so it cannot show that the answer states the newer rule, and the extractive backend passes it by
+  a year alone, so it cannot show that the answer acknowledges the conflict (recency/conflict word), and the extractive backend passes it by
   quoting a sentence that happens to contain such a word or year.** (b-strict, proposed in D-028, computed on the
   cleaned text) needs a recency/conflict word (not the year) and valid citations to both the newest and an older gold
   document. All three are shown side by side; none is a judgement of correctness.
@@ -93,7 +93,7 @@ Definitions.
   the text of the cited page (sentences without numbers are not counted); (ii) mean content-word overlap: share of
   the sentence's content words (4+ letters, fixed stop list) found on the cited page, averaged per question. Both are
   crude: a page can hold the right numbers and words without supporting the claim. They sit next to page-level
-  precision, which only says the page is a gold page. Most numeric claims in the Ollama answers (8 of 10 pairs with numbers) cite a page that does not contain the number, so page-level valid citation overstates attribution quality.
+  precision, which only says the page is a gold page. Most numeric citation pairs in the Ollama answers (8 of 10 pairs with numbers) cite a page that does not contain the number, so page-level valid citation overstates attribution quality.
 - Run-to-run variation: the Ollama runs use temperature 0 and seed 42, yet a regenerated run was not identical to
   the earlier one (a few statuses and one citation differed). Differences of 1-2 questions are within this noise.
 - The `Max prompt_eval_count` row covers the queries that reached the model (19 of 20 in the hybrid run; the
@@ -153,7 +153,7 @@ citation metric points to generation, not retrieval.
 - Whether prose is correct. Key facts are paraphrased sentences, so verbatim matching is almost always 0 (even
   against the full retrieved context); the word-coverage row is only a coarse proxy. Judging correctness needs
   manual labels or a judge model: see the owner's review table below.
-- Whether a conflict answer actually *states* the newer rule (see the conflict definition).
+- Whether a conflict answer actually acknowledges the conflict (recency/conflict word; see the conflict definition).
 - Injection compliance beyond the generic pattern check, the echo check and the small probe above.
 - Any held-out generalisation: there is no held-out split.
 

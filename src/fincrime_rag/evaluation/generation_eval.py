@@ -239,7 +239,7 @@ def summarize_backend(
         if q.key_facts
     ]
     add(rate("Key facts: word coverage (post-hoc, D-025, not pre-registered; coarse proxy)", coverage))
-    # conflict: (a) newest gold document cited, (b) answer text states the newer rule
+    # conflict: (a) newest gold document cited, (b) answer text acknowledges the conflict (recency/conflict word)
     all_doc_ids = [r.doc_id for r in read_manifest(cfg.paths.manifest)]
     cited_newest = b_original = b_fixed = b_strict = n_conflict = 0
     for q, a in results:
@@ -539,7 +539,7 @@ Definitions.
   differs) **or** the newest document's year, tested on the raw text. **Bug (D-029):** that test could match the
   year inside a citation tag, because the doc_id itself contains it. (b-fixed) is the same check after removing
   bracketed citation tags, `cite_as` labels and document ids from the text. **Even fixed, (b) passes on a keyword or
-  a year alone, so it cannot show that the answer states the newer rule, and the extractive backend passes it by
+  a year alone, so it cannot show that the answer acknowledges the conflict (recency/conflict word), and the extractive backend passes it by
   quoting a sentence that happens to contain such a word or year.** (b-strict, proposed in D-028, computed on the
   cleaned text) needs a recency/conflict word (not the year) and valid citations to both the newest and an older gold
   document. All three are shown side by side; none is a judgement of correctness.
@@ -595,7 +595,7 @@ citation metric points to generation, not retrieval.
 - Whether prose is correct. Key facts are paraphrased sentences, so verbatim matching is almost always 0 (even
   against the full retrieved context); the word-coverage row is only a coarse proxy. Judging correctness needs
   manual labels or a judge model: see the owner's review table below.
-- Whether a conflict answer actually *states* the newer rule (see the conflict definition).
+- Whether a conflict answer actually acknowledges the conflict (recency/conflict word; see the conflict definition).
 - Injection compliance beyond the generic pattern check, the echo check and the small probe above.
 - Any held-out generalisation: there is no held-out split.
 
@@ -696,7 +696,7 @@ def main(argv: list[str] | None = None) -> int:
         entry = ollama_support[SUPPORT_NUMERIC_ROW]
         bad = entry[1] - round(entry[0] * entry[1])
         support_sentence = (
-            f"Most numeric claims in the Ollama answers ({bad} of {entry[1]} pairs with numbers) cite a page "
+            f"Most numeric citation pairs in the Ollama answers ({bad} of {entry[1]} pairs with numbers) cite a page "
             "that does not contain the number, so page-level valid citation overstates attribution quality."
         )
     notes_path = reports_dir / "dev_question_notes.md"
