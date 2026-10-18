@@ -1,0 +1,17 @@
+# Versions this project was built and evaluated with (Python 3.14.8, Windows, CPU only).
+# Install: python -m pip install -r requirements.txt && python -m pip install -e .
+pydantic==2.14.1
+PyYAML==6.0.3
+python-dotenv==1.2.4
+pymupdf==1.28.2
+requests==2.34.2
+numpy==2.5.4
+sentence-transformers==6.1.0
+transformers==5.20.1
+torch==2.14.1
+chromadb==1.5.9
+rank-bm25==0.2.2
+rapidocr-onnxruntime==1.2.3
+streamlit==1.66.0
+pytest==9.1.1
+ruff==0.17.0
